@@ -19,42 +19,78 @@ import Data.List
 import Data.Bits
 import Control.Monad
 import Graphics.X11.Xlib.Extras
+import System.Console.GetOpt
+import Xmobar.Plugins.Monitors.Common (parseOptsWith)
 import Xmobar.Run.Exec
 import Xmobar.System.Kbd
 import Xmobar.X11.Events (nextEvent')
 
-data Locks = Locks
+data Locks = Locks [String]
     deriving (Read, Show)
 
-locks :: [ ( KeySym, String )]
-locks = [ ( xK_Caps_Lock,   "CAPS"   )
-        , ( xK_Num_Lock,    "NUM"    )
-        , ( xK_Scroll_Lock, "SCROLL" )
+data MOptions = MOptions
+  { oNumOn :: String
+  , oNumOff :: String
+  , oCapsOn :: String
+  , oCapsOff :: String
+  , oScrollOn :: String
+  , oScrollOff :: String
+  }
+
+defaults :: MOptions
+defaults = MOptions
+  { oNumOn = "NUM"
+  , oNumOff = ""
+  , oCapsOn = "CAPS"
+  , oCapsOff = ""
+  , oScrollOn = "SCROLL"
+  , oScrollOff = ""
+  }
+
+options :: [OptDescr (MOptions -> MOptions)]
+options =
+  [ Option "n" ["numoff"] (ReqArg (\x o -> o { oNumOff = x }) "") ""
+  , Option "N" ["numon"] (ReqArg (\x o -> o { oNumOn = x }) "") ""
+  , Option "c" ["capsoff"] (ReqArg (\x o -> o { oCapsOff = x }) "") ""
+  , Option "C" ["capson"] (ReqArg (\x o -> o { oCapsOn = x }) "") ""
+  , Option "s" ["scrolloff"] (ReqArg (\x o -> o { oScrollOff = x }) "") ""
+  , Option "S" ["scrollon"] (ReqArg (\x o -> o { oScrollOn = x }) "") ""
+  ]
+
+locks :: [ ( KeySym, (MOptions -> String, MOptions -> String) )]
+locks = [ ( xK_Caps_Lock,   (oCapsOn, oCapsOff) )
+        , ( xK_Num_Lock,    (oNumOn, oNumOff) )
+        , ( xK_Scroll_Lock, (oScrollOn, oScrollOff) )
         ]
 
-run' :: Display -> Window -> IO String
-run' d root = do
+run' :: Display -> Window -> MOptions -> IO String
+run' d root opts = do
     modMap <- getModifierMapping d
     ( _, _, _, _, _, _, _, m ) <- queryPointer d root
 
-    ls <- filterM ( \( ks, _ ) -> do
+    ls <- mapM ( \( ks, fs ) -> do
         kc <- keysymToKeycode d ks
-        return $ case find (elem kc . snd) modMap of
+        return
+          $ (\b -> if b then fst fs else snd fs)
+          $ case find (elem kc . snd) modMap of
             Nothing       -> False
             Just ( i, _ ) -> testBit m (fromIntegral i)
         ) locks
 
-    return $ unwords $ map snd ls
+    return $ unwords
+      $ filter (not . null)
+      $ map (\f -> f opts) ls
 
 instance Exec Locks where
-    alias Locks = "locks"
-    start Locks cb = do
+    alias (Locks _) = "locks"
+    start (Locks args) cb = do
+        opts <- parseOptsWith options defaults args
         d <- openDisplay ""
         root <- rootWindow d (defaultScreen d)
         _ <- xkbSelectEventDetails d xkbUseCoreKbd xkbIndicatorStateNotify m m
 
         allocaXEvent $ \ep -> forever $ do
-            cb =<< run' d root
+            cb =<< run' d root opts
             nextEvent' d ep
             getEvent ep
 
