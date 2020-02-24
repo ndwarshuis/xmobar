@@ -35,6 +35,7 @@ data MOptions = MOptions
   , oCapsOff :: String
   , oScrollOn :: String
   , oScrollOff :: String
+  , oDelimiter :: String
   }
 
 defaults :: MOptions
@@ -45,6 +46,7 @@ defaults = MOptions
   , oCapsOff = ""
   , oScrollOn = "SCROLL"
   , oScrollOff = ""
+  , oDelimiter = " "
   }
 
 options :: [OptDescr (MOptions -> MOptions)]
@@ -55,6 +57,7 @@ options =
   , Option "C" ["capson"] (ReqArg (\x o -> o { oCapsOn = x }) "") ""
   , Option "s" ["scrolloff"] (ReqArg (\x o -> o { oScrollOff = x }) "") ""
   , Option "S" ["scrollon"] (ReqArg (\x o -> o { oScrollOn = x }) "") ""
+  , Option "d" ["delimiter"] (ReqArg (\x o -> o { oDelimiter = x }) "") ""
   ]
 
 locks :: [ ( KeySym, (MOptions -> String, MOptions -> String) )]
@@ -77,7 +80,7 @@ run' d root opts = do
             Just ( i, _ ) -> testBit m (fromIntegral i)
         ) locks
 
-    return $ unwords
+    return $ intercalate (oDelimiter opts)
       $ filter (not . null)
       $ map (\f -> f opts) ls
 
