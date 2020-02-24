@@ -61,8 +61,8 @@ options =
   ]
 
 locks :: [ ( KeySym, (MOptions -> String, MOptions -> String) )]
-locks = [ ( xK_Caps_Lock,   (oCapsOn, oCapsOff) )
-        , ( xK_Num_Lock,    (oNumOn, oNumOff) )
+locks = [ ( xK_Num_Lock,    (oNumOn, oNumOff) )
+        , ( xK_Caps_Lock,   (oCapsOn, oCapsOff) )
         , ( xK_Scroll_Lock, (oScrollOn, oScrollOff) )
         ]
 
