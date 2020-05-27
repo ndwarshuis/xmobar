@@ -3,7 +3,7 @@
 ------------------------------------------------------------------------------
 -- |
 -- Module: Utils
--- Copyright: (c) 2010, 2018 Jose Antonio Ortega Ruiz
+-- Copyright: (c) 2010, 2018, 2020 Jose Antonio Ortega Ruiz
 -- License: BSD3-style (see LICENSE)
 --
 -- Maintainer: Jose A Ortega Ruiz <jao@gnu.org>
@@ -17,27 +17,21 @@
 ------------------------------------------------------------------------------
 
 
-module Xmobar.System.Utils (expandHome, changeLoop, hGetLineSafe)
-where
+module Xmobar.System.Utils
+  ( expandHome
+  , changeLoop
+  , onSomeException
+  , safeIndex
+  ) where
 
 import Control.Monad
 import Control.Concurrent.STM
+import qualified Data.List.NonEmpty as NE
+import Data.Maybe (fromMaybe)
 
 import System.Environment
 import System.FilePath
-import System.IO
-
-#if defined XFT || defined UTF8
-import qualified System.IO as S (hGetLine)
-#endif
-
-hGetLineSafe :: Handle -> IO String
-#if defined XFT || defined UTF8
-hGetLineSafe = S.hGetLine
-#else
-hGetLineSafe = hGetLine
-#endif
-
+import Control.Exception
 
 expandHome :: FilePath -> IO FilePath
 expandHome ('~':'/':path) = fmap (</> path) (getEnv "HOME")
@@ -52,3 +46,26 @@ changeLoop s f = atomically s >>= go
             new <- s
             guard (new /= old)
             return new)
+
+-- | Like 'finally', but only performs the final action if there was an
+-- exception raised by the computation.
+--
+-- Note that this implementation is a slight modification of
+-- onException function.
+onSomeException :: IO a -> (SomeException -> IO b) -> IO a
+onSomeException io what = io `catch` \e -> do _ <- what e
+                                              throwIO (e :: SomeException)
+
+(!!?) :: [a] -> Int -> Maybe a
+(!!?) xs i
+    | i < 0     = Nothing
+    | otherwise = go i xs
+  where
+    go :: Int -> [a] -> Maybe a
+    go 0 (x:_)  = Just x
+    go j (_:ys) = go (j - 1) ys
+    go _ []     = Nothing
+{-# INLINE (!!?) #-}
+
+safeIndex :: NE.NonEmpty a -> Int -> a
+safeIndex xs index = fromMaybe (NE.head xs) (NE.toList xs !!? index)
