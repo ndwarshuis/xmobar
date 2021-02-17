@@ -1,10 +1,59 @@
-## Version 0.34 (April, 2020)
+## Version 0.37 (November, 2020)
+
+_New features_
+
+  - New command line option `--add-font` (Ivan Brennan)
+  - New monitor `MPDX` that extends `MPD` with the ability of having a
+    custom alias.  Useful for connecting with multiple servers.
+  - New plugin `NotmuchMail` to monitor mail indexed by `notmuch`.
+
+_Bug fixes_
+
+  - Fix date plugin not picking up DST and timezone changes (refresh
+    timezone once a minute to preserve the optimized performace of 0.34).
+
+## Version 0.36 (August, 2020)
+
+_New features_
+
+  - Monitor progress bars: a value of 0 for `-W` denotes an index in
+    the `-f` string, similar to icon patterns but using characters.
+  - New tag `<box>` to add borders around text (Unoqwy).
+  - `fc` color background now accepts an offset (Unoqwy).
+
+_Bug fixes_
+
+  - Documentation fixes (Tomáš Janoušek)
+  - Don't get confused by empty configuration dirs (fixes #412)
+  - Xft rendering: Avoid encoding to UTF8 on all scenarios. This
+    causes issue to StdinReader monitor when the handle wasn't binary.
+
+## Version 0.35.1 (June, 2020)
+
+- Dropped support for GHC < 8.4 (see issue #461)
+
+## Version 0.35 (June, 2020)
+
+_New features_
+
+  - `MultiCoreTemp` now works with Ryzen processors.  New option
+    `--hwmonitor-path` for better performance.
+  - CPU Monitor optimizations.
+  - Version bumps for some dependencies, including timezone-olson.
+
+## Version 0.34 (June, 2020)
 
 _New features_
 
   - New plugin `HandleReader` for reading data from a Haskell `Handle`. This is
     useful if you are running xmobar from within a Haskell program.
   - Build with ghc 8.10 allowed.
+  - Optimize date plugin by avoiding calling getTimeZone for each of
+    the time the date has to be updated. Instead, it's computed once
+    at the start and re-used for each invocation.
+  - Optimize Weather and UVMeter plugin by using global Manager
+    instead of creating for each http request when useManager is
+    explicitly configured as False.
 
 ## Version 0.33 (February, 2020)
 

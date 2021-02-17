@@ -1,7 +1,9 @@
+{-#LANGUAGE RecordWildCards#-}
+
 ------------------------------------------------------------------------------
 -- |
 -- Module: Xmobar.Plugins.Monitors.Strings
--- Copyright: (c) 2018, 2019 Jose Antonio Ortega Ruiz
+-- Copyright: (c) 2018, 2019, 2020 Jose Antonio Ortega Ruiz
 -- License: BSD3-style (see LICENSE)
 --
 -- Maintainer: jao@gnu.org
@@ -37,6 +39,11 @@ module Xmobar.Plugins.Monitors.Common.Output ( IconPattern
                                              , parseFloat
                                              , parseInt
                                              , stringParser
+                                             , pShowPercentsWithColors
+                                             , pShowPercentBar
+                                             , pShowVerticalBar
+                                             , pShowIconPattern
+                                             , pShowPercentWithColors
                                              ) where
 
 import Data.Char
@@ -44,10 +51,63 @@ import Data.List (intercalate, sort)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Numeric
 import Control.Monad (zipWithM)
-
+import Control.Monad.IO.Class (MonadIO(..))
 import Xmobar.Plugins.Monitors.Common.Types
 
 type IconPattern = Int -> String
+
+pShowVerticalBar :: (MonadIO m) => MonitorConfig -> Float -> Float -> m String
+pShowVerticalBar p v x = pColorizeString p v [convert $ 100 * x]
+  where convert :: Float -> Char
+        convert val
+          | t <= 9600 = ' '
+          | t > 9608 = chr 9608
+          | otherwise = chr t
+          where t = 9600 + (round val `div` 12)
+
+pShowPercentsWithColors :: (MonadIO m) => MonitorConfig -> [Float] -> m [String]
+pShowPercentsWithColors p fs =
+  do let fstrs = map (pFloatToPercent p) fs
+         temp = map (*100) fs
+     zipWithM (pShowWithColors p . const) fstrs temp
+
+pShowPercentWithColors :: (MonadIO m) => MonitorConfig -> Float -> m String
+pShowPercentWithColors p f = fmap head $ pShowPercentsWithColors p [f]
+
+pShowPercentBar :: (MonadIO m) => MonitorConfig -> Float -> Float -> m String
+pShowPercentBar p@MonitorConfig{..} v x = do
+  let len = min pBarWidth $ round (fromIntegral pBarWidth * x)
+  s <- pColorizeString p v (take len $ cycle pBarFore)
+  return $ s ++ take (pBarWidth - len) (cycle pBarBack)
+
+pShowWithColors :: (Num a, Ord a, MonadIO m) => MonitorConfig -> (a -> String) -> a -> m String
+pShowWithColors p f x = do
+  let str = pShowWithPadding p (f x)
+  pColorizeString p x str
+
+pColorizeString :: (Num a, Ord a, MonadIO m) => MonitorConfig -> a -> String -> m String
+pColorizeString p x s = do
+    let col = pSetColor p s
+        [ll,hh] = map fromIntegral $ sort [pLow p, pHigh p] -- consider high < low
+    pure $ head $ [col pHighColor   | x > hh ] ++
+                  [col pNormalColor | x > ll ] ++
+                  [col pLowColor    | True]
+
+pSetColor :: MonitorConfig -> String -> PSelector (Maybe String) -> String
+pSetColor config str s =
+    do let a = getPConfigValue config s
+       case a of
+            Nothing -> str
+            Just c -> "<fc=" ++ c ++ ">" ++ str ++ "</fc>"
+
+pShowWithPadding :: MonitorConfig -> String -> String
+pShowWithPadding MonitorConfig {..} =
+  padString pMinWidth pMaxWidth pPadChars pPadRight pMaxWidthEllipsis
+
+pFloatToPercent :: MonitorConfig -> Float -> String
+pFloatToPercent MonitorConfig{..} n = let p = showDigits 0 (n * 100)
+                                          ps = if pUseSuffix then "%" else ""
+                                      in padString pPpad pPpad pPadChars pPadRight "" p ++ ps
 
 parseIconPattern :: String -> IconPattern
 parseIconPattern path =
@@ -161,13 +221,25 @@ showPercentBar v x = do
   bb <- getConfigValue barBack
   bf <- getConfigValue barFore
   bw <- getConfigValue barWidth
-  let len = min bw $ round (fromIntegral bw * x)
-  s <- colorizeString v (take len $ cycle bf)
-  return $ s ++ take (bw - len) (cycle bb)
+  let c = bw < 1
+      w = if c then length bf else bw
+      len = min w $ round (fromIntegral w * x)
+      bfs = if c then [bf !! max 0 (len - 1)] else take len $ cycle bf
+  s <- colorizeString v bfs
+  return $ s ++ if c then "" else take (bw - len) (cycle bb)
 
 showIconPattern :: Maybe IconPattern -> Float -> Monitor String
 showIconPattern Nothing _ = return ""
 showIconPattern (Just str) x = return $ str $ convert $ 100 * x
+  where convert val
+          | t <= 0 = 0
+          | t > 8 = 8
+          | otherwise = t
+          where t = round val `div` 12
+
+pShowIconPattern :: Maybe IconPattern -> Float -> IO String
+pShowIconPattern Nothing _ = return ""
+pShowIconPattern (Just str) x = return $ str $ convert $ 100 * x
   where convert val
           | t <= 0 = 0
           | t > 8 = 8

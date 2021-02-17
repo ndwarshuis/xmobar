@@ -1,5 +1,5 @@
 name:               xmobar
-version:            0.34
+version:            0.37
 homepage:           http://xmobar.org
 synopsis:           A Minimalistic Text Based Status Bar
 description: 	    Xmobar is a minimalistic text based status bar.
@@ -13,10 +13,11 @@ license-file:       license
 author:             Andrea Rossato and Jose A. Ortega Ruiz
 maintainer:         Jose A. Ortega Ruiz <jao@gnu.org>
 bug-reports:        https://github.com/jaor/xmobar/issues
-cabal-version:      >= 1.8
+cabal-version:      >= 1.10
 build-type:         Simple
 
-extra-source-files: readme.md, changelog.md,
+extra-source-files: readme.org, changelog.md,
+                    doc/quick-start.org, doc/plugins.org
                     examples/padding-icon.sh,
                     examples/xmobar.config,
                     examples/xmobar.hs,
@@ -92,9 +93,14 @@ flag with_weather
   default: True
 
 library
+    default-language: Haskell2010
     hs-source-dirs:  src
 
-    exposed-modules: Xmobar
+    exposed-modules: Xmobar,
+                     Xmobar.Plugins.Monitors.Common.Types,
+                     Xmobar.Plugins.Monitors.Common.Run,
+                     Xmobar.Plugins.Monitors.Common,
+                     Xmobar.Plugins.Monitors.Cpu
 
     other-modules: Paths_xmobar,
                    Xmobar.Config.Types,
@@ -136,17 +142,14 @@ library
                    Xmobar.Plugins.XMonadLog,
                    Xmobar.Plugins.Kbd,
                    Xmobar.Plugins.Locks,
+                   Xmobar.Plugins.NotmuchMail,
                    Xmobar.Plugins.Monitors,
                    Xmobar.Plugins.Monitors.Batt,
-                   Xmobar.Plugins.Monitors.Common,
-                   Xmobar.Plugins.Monitors.Common.Types,
-                   Xmobar.Plugins.Monitors.Common.Run,
                    Xmobar.Plugins.Monitors.Common.Output,
                    Xmobar.Plugins.Monitors.Common.Parsers,
                    Xmobar.Plugins.Monitors.Common.Files,
                    Xmobar.Plugins.Monitors.CoreTemp,
                    Xmobar.Plugins.Monitors.CpuFreq,
-                   Xmobar.Plugins.Monitors.Cpu,
                    Xmobar.Plugins.Monitors.Disk,
                    Xmobar.Plugins.Monitors.Mem,
                    Xmobar.Plugins.Monitors.MultiCoreTemp,
@@ -165,7 +168,7 @@ library
     ghc-options: -funbox-strict-fields -Wall -fno-warn-unused-do-bind
 
     build-depends:
-      base >= 4.9.1.0 && < 4.15,
+      base >= 4.11.0 && < 4.15,
       containers,
       regex-compat,
       process,
@@ -228,7 +231,7 @@ library
        cpp-options: -DUSE_NL80211
 
     if flag(with_mpd) || flag(all_extensions)
-       build-depends: libmpd >= 0.9.0.10
+       build-depends: libmpd >= 0.9.2.0
        other-modules: Xmobar.Plugins.Monitors.MPD
        cpp-options: -DLIBMPD
 
@@ -241,7 +244,7 @@ library
        cpp-options: -DALSA
 
     if flag(with_datezone) || flag(all_extensions)
-       build-depends: timezone-olson == 0.1.*, timezone-series == 0.1.*
+       build-depends: timezone-olson >= 0.2 && < 0.3, timezone-series == 0.1.*
        other-modules: Xmobar.Plugins.DateZone
        cpp-options: -DDATEZONE
 
@@ -263,7 +266,7 @@ library
     if flag(with_weather) || flag(all_extensions)
        other-modules: Xmobar.Plugins.Monitors.Weather
        cpp-options: -DWEATHER
-       build-depends: http-conduit, http-types
+       build-depends: http-conduit, http-types, http-client-tls
 
     if flag(with_uvmeter)
        other-modules: Xmobar.Plugins.Monitors.UVMeter
@@ -276,6 +279,7 @@ library
        cpp-options: -DFREEBSD
 
 executable xmobar
+    default-language:   Haskell2010
     hs-source-dirs:     app
     main-is:            Main.hs
     build-depends:      base,
@@ -301,6 +305,7 @@ executable xmobar
        cpp-options: -DTHREADED_RUNTIME
 
 test-suite XmobarTest
+  default-language:   Haskell2010
   type:           exitcode-stdio-1.0
   hs-source-dirs: src, test
   main-is:        Spec.hs
@@ -328,10 +333,12 @@ test-suite XmobarTest
   other-modules: Xmobar.Plugins.Monitors.CommonSpec
                  Xmobar.Plugins.Monitors.Common
                  Xmobar.Plugins.Monitors.Common.Parsers
-                 Xmobar.Plugins.Monitors.Common.Run
                  Xmobar.Plugins.Monitors.Common.Types
                  Xmobar.Plugins.Monitors.Common.Output
                  Xmobar.Plugins.Monitors.Common.Files
+                 Xmobar.Plugins.Monitors.Cpu
+                 Xmobar.Plugins.Monitors.CpuSpec
+                 Xmobar.Plugins.Monitors.Common.Run
                  Xmobar.Run.Exec
                  Xmobar.App.Timer
                  Xmobar.System.Signal
@@ -345,3 +352,12 @@ test-suite XmobarTest
                      Xmobar.Plugins.Monitors.AlsaSpec
 
       cpp-options: -DALSA
+
+benchmark xmobarbench
+  type: exitcode-stdio-1.0
+  main-is: main.hs
+  hs-source-dirs:
+      bench
+  ghc-options: -funbox-strict-fields -Wall -fno-warn-unused-do-bind -O2
+  build-depends: base, gauge, xmobar, mtl, time
+  default-language: Haskell2010

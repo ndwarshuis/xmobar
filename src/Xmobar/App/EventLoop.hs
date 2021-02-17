@@ -3,7 +3,7 @@
 ------------------------------------------------------------------------------
 -- |
 -- Module: Xmobar.X11.EventLoop
--- Copyright: (c) 2018 Jose Antonio Ortega Ruiz
+-- Copyright: (c) 2018, 2020 Jose Antonio Ortega Ruiz
 -- License: BSD3-style (see LICENSE)
 --
 -- Maintainer: jao@gnu.org
@@ -31,7 +31,6 @@ import Graphics.X11.Xinerama
 import Graphics.X11.Xrandr
 
 import Control.Arrow ((&&&))
-import Control.Applicative ((<$>))
 import Control.Monad.Reader
 import Control.Concurrent
 import Control.Concurrent.Async (Async, async)
@@ -71,7 +70,7 @@ runX :: XConf -> X () -> IO ()
 runX xc f = runReaderT f xc
 
 newRefreshLock :: IO (TMVar ())
-newRefreshLock = atomically $ newTMVar ()
+newRefreshLock = newTMVarIO ()
 
 refreshLock :: TMVar () -> IO a -> IO a
 refreshLock var = bracket_ lock unlock
@@ -96,7 +95,7 @@ startLoop xcfg@(XConf _ _ w _ _ _ _) sig pauser vs = do
 #ifdef XFT
     xftInitFtLibrary
 #endif
-    tv <- atomically $ newTVar []
+    tv <- newTVarIO []
     _ <- forkIO (handle (handler "checker") (checker tv [] vs sig pauser))
 #ifdef THREADED_RUNTIME
     _ <- forkOS (handle (handler "eventer") (eventer sig))
@@ -239,10 +238,10 @@ startCommand :: TMVar SignalType
              -> (Runnable,String,String)
              -> IO ([Async ()], TVar String)
 startCommand sig (com,s,ss)
-    | alias com == "" = do var <- atomically $ newTVar is
+    | alias com == "" = do var <- newTVarIO is
                            atomically $ writeTVar var (s ++ ss)
                            return ([], var)
-    | otherwise = do var <- atomically $ newTVar is
+    | otherwise = do var <- newTVarIO is
                      let cb str = atomically $ writeTVar var (s ++ str ++ ss)
                      a1 <- async $ start com cb
                      a2 <- async $ trigger com $ maybe (return ())
@@ -251,17 +250,17 @@ startCommand sig (com,s,ss)
     where is = s ++ "Updating..." ++ ss
 
 updateString :: Config -> TVar [String]
-                -> IO [[(Widget, String, Int, Maybe [Action])]]
+                -> IO [[(Widget, TextRenderInfo, Int, Maybe [Action])]]
 updateString conf v = do
   s <- readTVarIO v
   let l:c:r:_ = s ++ repeat ""
   liftIO $ mapM (parseString conf) [l, c, r]
 
-updateActions :: XConf -> Rectangle -> [[(Widget, String, Int, Maybe [Action])]]
+updateActions :: XConf -> Rectangle -> [[(Widget, TextRenderInfo, Int, Maybe [Action])]]
                  -> IO [([Action], Position, Position)]
 updateActions conf (Rectangle _ _ wid _) ~[left,center,right] = do
   let (d,fs) = (display &&& fontListS) conf
-      strLn :: [(Widget, String, Int, Maybe [Action])] -> IO [(Maybe [Action], Position, Position)]
+      strLn :: [(Widget, TextRenderInfo, Int, Maybe [Action])] -> IO [(Maybe [Action], Position, Position)]
       strLn  = liftIO . mapM getCoords
       iconW i = maybe 0 Bitmap.width (lookup i $ iconS conf)
       getCoords (Text s,_,i,a) = textWidth d (safeIndex fs i) s >>= \tw -> return (a, 0, fi tw)

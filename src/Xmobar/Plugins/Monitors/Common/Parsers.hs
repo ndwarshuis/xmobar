@@ -1,7 +1,10 @@
+{-#LANGUAGE RecordWildCards#-}
+{-#LANGUAGE ScopedTypeVariables#-}
+
 ------------------------------------------------------------------------------
 -- |
 -- Module: Xmobar.Plugins.Monitors.Parsers
--- Copyright: (c) 2018 Jose Antonio Ortega Ruiz
+-- Copyright: (c) 2018, 2020 Jose Antonio Ortega Ruiz
 -- License: BSD3-style (see LICENSE)
 --
 -- Maintainer: jao@gnu.org
@@ -25,14 +28,46 @@ module Xmobar.Plugins.Monitors.Common.Parsers ( runP
                                               , parseTemplate
                                               , parseTemplate'
                                               , parseOptsWith
+                                              , templateParser
+                                              , runExportParser
+                                              , runTemplateParser
+                                              , pureParseTemplate
                                               ) where
 
 import Xmobar.Plugins.Monitors.Common.Types
 
-import Control.Applicative ((<$>))
 import qualified Data.Map as Map
 import System.Console.GetOpt (ArgOrder(Permute), OptDescr, getOpt)
 import Text.ParserCombinators.Parsec
+
+runTemplateParser :: MonitorConfig -> IO [(String, String, String)]
+runTemplateParser MonitorConfig{..} = runP templateParser pTemplate
+
+runExportParser :: [String] -> IO [(String, [(String, String,String)])]
+runExportParser [] = pure []
+runExportParser (x:xs) = do
+  s <- runP templateParser x
+  rest <- runExportParser xs
+  pure $ (x,s):rest
+
+pureParseTemplate :: MonitorConfig -> TemplateInput -> IO String
+pureParseTemplate MonitorConfig{..} TemplateInput{..} =
+    do let m = let expSnds :: [([(String, String, String)], String)]  = zip (map snd temAllTemplate) temMonitorValues
+               in Map.fromList $ zip (map fst temAllTemplate) expSnds
+       s <- minCombine m temInputTemplate
+       let (n, s') = if pMaxTotalWidth > 0 && length s > pMaxTotalWidth
+                     then trimTo (pMaxTotalWidth - length pMaxTotalWidthEllipsis) "" s
+                     else (1, s)
+       return $ if n > 0 then s' else s' ++ pMaxTotalWidthEllipsis
+
+minCombine :: Map.Map String ([(String, String, String)], String) -> [(String, String, String)] -> IO String
+minCombine _ [] = return []
+minCombine m ((s,ts,ss):xs) =
+    do next <- minCombine m xs
+       str <- case Map.lookup ts m of
+         Nothing -> return $ "<" ++ ts ++ ">"
+         Just (s',r) -> let f "" = r; f n = n; in f <$> minCombine m s'
+       pure $ s ++ str ++ ss ++ next
 
 runP :: Parser [a] -> String -> IO [a]
 runP p i =

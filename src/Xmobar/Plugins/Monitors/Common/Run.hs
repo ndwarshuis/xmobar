@@ -22,6 +22,9 @@ module Xmobar.Plugins.Monitors.Common.Run ( runM
                                           , runML
                                           , runMLD
                                           , getArgvs
+                                          , doArgs
+                                          , computeMonitorConfig
+                                          , pluginOptions
                                           ) where
 
 import Control.Exception (SomeException,handle)
@@ -32,11 +35,11 @@ import System.Console.GetOpt
 import Xmobar.Plugins.Monitors.Common.Types
 import Xmobar.Run.Exec (doEveryTenthSeconds)
 
-options :: [OptDescr Opts]
-options =
+pluginOptions :: [OptDescr Opts]
+pluginOptions =
     [
-      Option "H" ["High"] (ReqArg High "number") "The high threshold"
-    , Option "L" ["Low"] (ReqArg Low "number") "The low threshold"
+      Option ['H'] ["High"] (ReqArg High "number") "The high threshold"
+    , Option ['L'] ["Low"] (ReqArg Low "number") "The low threshold"
     , Option "h" ["high"] (ReqArg HighColor "color number") "Color for the high threshold: ex \"#FF0000\""
     , Option "n" ["normal"] (ReqArg NormalColor "color number") "Color for the normal threshold: ex \"#00FF00\""
     , Option "l" ["low"] (ReqArg LowColor "color number") "Color for the low threshold: ex \"#0000FF\""
@@ -61,16 +64,18 @@ options =
 -- | Get all argument values out of a list of arguments.
 getArgvs :: [String] -> [String]
 getArgvs args =
-    case getOpt Permute options args of
+    case getOpt Permute pluginOptions args of
         (_, n, []  ) -> n
         (_, _, errs) -> errs
+
+
 
 doArgs :: [String]
        -> ([String] -> Monitor String)
        -> ([String] -> Monitor Bool)
        -> Monitor String
 doArgs args action detect =
-    case getOpt Permute options args of
+    case getOpt Permute pluginOptions args of
       (o, n, [])   -> do doConfigOptions o
                          ready <- detect n
                          if ready
@@ -139,3 +144,18 @@ runMLD args conf action looper detect cb = handle (cb . showException) loop
 
 showException :: SomeException -> String
 showException = ("error: "++) . show . flip asTypeOf undefined
+
+computeMonitorConfig :: [String] -> IO MConfig -> IO MonitorConfig
+computeMonitorConfig args mconfig = do
+  newConfig <- getMConfig args mconfig
+  getMonitorConfig newConfig
+
+getMConfig :: [String] -> IO MConfig -> IO MConfig
+getMConfig args mconfig = do
+  config <- mconfig
+  runReaderT (updateOptions args >> ask) config
+
+updateOptions :: [String] -> Monitor ()
+updateOptions args= case getOpt Permute pluginOptions args of
+                      (o, _, []) -> doConfigOptions o
+                      _ -> return ()
